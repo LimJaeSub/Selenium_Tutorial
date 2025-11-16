@@ -1,6 +1,9 @@
 # Selenium_Tutorial
-> ## Selenium 1단계: 기초
-> ---
+<details>
+   <summary>
+      ## Selenium 1단계: 기초
+   </summary>
+   ---
 
 ## 1️⃣ 환경 설정
 
@@ -234,6 +237,9 @@ import time
    - `input()` 또는 `time.sleep()`으로 대기 추가
 
 ---
+</details>
+
+
 
 
 
