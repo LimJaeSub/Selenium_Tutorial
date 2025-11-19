@@ -240,7 +240,6 @@ import time
 </details>
 <details>
    <summary>Selenium 2단계 : CSS Selector</summary>
-   # Stage 2: CSS Selector 마스터하기
 
 ## 📚 학습 목표
 
