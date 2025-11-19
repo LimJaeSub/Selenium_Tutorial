@@ -1,7 +1,7 @@
 # Selenium_Tutorial
 <details>
    <summary>
-      ## Selenium 1단계: 기초
+      Selenium 1단계: 기초
    </summary>
    ---
 
