@@ -3,6 +3,10 @@ from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 from webdriver_manager.chrome import ChromeDriverManager
 
+# Explicitly wait 설정
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+
 
 def setup_chrome_driver():
     """크롬 드라이버 설정 (봇 탐지 방지 포함)"""
@@ -14,9 +18,11 @@ def setup_chrome_driver():
     service = Service(ChromeDriverManager().install())
     driver = webdriver.Chrome(service=service, options=chrome_options)
     
+    
+    
+    
     driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})") 
     # navigator의 webdriver 속성을 get할때 undefined로 반환하여 숨김
-    
     # navigater.webdriver가 true일 경우 chrome의 reCAPTCHA가 발생함
     
     return driver
@@ -25,3 +31,5 @@ def setup_simple_driver():
     """간단한 크롬 드라이버 (봇 탐지 방지 없음)"""
     service = Service(ChromeDriverManager().install())
     return webdriver.Chrome(service=service)
+
+
