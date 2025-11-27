@@ -1,5 +1,6 @@
 import sys
 import os
+from urllib.parse import unquote  # ✅ URL 디코딩 모듈
 
 current_file = os.path.abspath(__file__) # 현재 파일 경로를 절대 경로로 변환
 current_dir = os.path.dirname(current_file) # 현재 파일 경로(절대경로)에서 디렉토리만 남김
@@ -20,58 +21,110 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException
 import time
 
-def find_element_retry(driver,by,value,timeout=10,retries=3):
-    # 대기시간
-    wait = WebDriverWait(driver,timeout)
-    
-    for i in range(retries):
+def safe_find_click(driver, wait, retries=3):
+    # 안전하게 요소 찾기
+    for attempt in range(retries):
         try:
-            element = wait.until(
-                EC.visibility_of_element_located((by,value))
+            # 해당 함수는 자동완성이 생긴 뒤 호출되는 함수이므로
+            # 굳이 presence_of_element_located로 대기할 필요 없음
+            second_item_click_btn = wait.until(
+                EC.element_to_be_clickable(
+                    (By.CSS_SELECTOR, '.kwd_lst .item:nth-child(2) .kwd')
+                )
             )
-            print(f"✅ 요소를 찾았습니다: {value}")
-            return element
+            print("요소 찾음")
+            return second_item_click_btn
         except TimeoutException:
-            print(f"❌ 요소를 찾지 못했습니다. 재시도 {i+1}/{retries}: {value}")
-            if i == retries-1:
-                raise ValueError("재시도 횟수 초과")
-            time.sleep(1) # 재시도 전 대기 시간
+            print("버튼 찾기 실패")
+            print(f"❌ {attempt+1}번째 시도: 두 번째 자동완성 요소를 찾지 못했습니다. 재시도 중...")
+            if attempt == retries - 1:
+                raise
+            time.sleep(1)
+
     
 def main():
     driver = setup_chrome_driver()
      
     try:
+        # driver & wait 설정
         driver.get("https://www.naver.com")
-        wait = WebDriverWait(driver,10) # 10초 대기
+        wait = WebDriverWait(driver, 10)
         
-        # 재시도 로직이 포함된 search_box 찾기
-        search_box = find_element_retry(
-            driver,By.ID,"query",timeout=10,retries=3
-        )
+        # 검색창 찾기
+        search_box = wait.until(EC.visibility_of_element_located((By.ID,"query")))
         
-        # 검색어 입력
-        search_box.send_keys("검색어임")
+        # 자동완성 확인
+        search_word = input("자동완성 검색어 입력 : ")
+        for char in search_word:
+            search_box.send_keys(char) # search_word의 글자 하나씩 입력
+            time.sleep(0.3) # 자동완성 나타나는 시간
         
-        # 버튼 렌더링 대기
-        search_button = wait.until(
-            EC.element_to_be_clickable((By.ID, "search-btn"))
-        )
-        print("✅ 검색 버튼 준비 완료")
+        print(f"{search_word} 입력 완료")
+        time.sleep(1)
         
-        # 검색버튼 클릭
-        search_button.click()
+        page_source = driver.page_source
         
-        # 페이지 이동 대기
-        try:
-            wait.until(EC.url_contains("search.naver.com")) # URL에 search.naver.com 이 포함되어있을때까지 대기
-            print(f"✅ 페이지 이동 완료: {driver.current_url}")
-        except TimeoutException:
-            print("❌ 페이지 이동 대기 시간 초과")
+        if 'role="listbox"' in page_source:
+            print("✅ 페이지에 role='listbox' 존재함")
+        else:
+            print("❌ 페이지에 role='listbox' 없음")
+        
+        if 'kwd_lst' in page_source:
+            print("✅ 페이지에 'kwd_lst' 클래스 존재함")
+        else:
+            print("❌ 페이지에 'kwd_lst' 클래스 없음")
             
+            
+        try:
+            autocomplete_list = wait.until(
+                 EC.presence_of_element_located(
+                    (By.CSS_SELECTOR, ".kwd_lst")
+                )
+            )
+            print("✅ 자동완성 항목이 나타났습니다.")
+            
+            list_items = wait.until(
+                EC.visibility_of_all_elements_located(
+                    (By.CSS_SELECTOR, '.kwd_lst .item .kwd_txt') # 자동완성 항목들
+                )
+            )
+            
+            print(f"자동완성 항목 개수 : {len(list_items)}")
+            for item in list_items:
+                print(f"- {item.text}")
+                
+        except TimeoutException:
+            print("❌ 자동완성 항목이 나타나지 않았습니다.")
+            
+        second_item = list_items[1]
+        print(f"자동완성 두 번째 요소 : {second_item.text}")
+        
+        # 두 번째 요소 클릭
+        print("두 번째 요소 클릭 대기 중")
+        second_btn = safe_find_click(driver,wait,retries=3)
+        
+        second_btn.click()
+        print("두 번째 요소 클릭 완료")
+        
+        # 결과 페이지가 변경되었는지 확인
+        # 페이지 url에 search_word가 포함되었는지 확인
+        
+        time.sleep(2) # 페이지 변환 대기
+        current_url = unquote(driver.current_url) # URL 디코딩
+        
+        print(f"현재 URL: {current_url}")
+        print(f"검색어: {search_word}")
+        
+        if(search_word in current_url):
+            print("✅ 결과 페이지 URL에 검색어가 포함되어 있습니다.")
+        else:
+            print("❌ 결과 페이지 URL에 검색어가 포함되어 있지 않습니다.")
+        
     except Exception as e:
         print(f"❌ 에러 발생: {e}")
     
     finally:
+        input("엔터키 누르면 종료...")
         driver.quit()    
         
 if __name__=="__main__":
