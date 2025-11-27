@@ -661,6 +661,555 @@ driver.quit()
 
 </details>
 
+<details>
+    <summary>
+      Selenium 3단계: Wait
+    </summary>
+    
+
+### 주요 학습 내용
+- Implicit Wait (암묵적 대기)
+- Explicit Wait (명시적 대기)
+- Expected Conditions (EC)
+- Timeout 예외 처리
+- 커스텀 Wait 조건
+- 동적 페이지 요소 다루기
+
+---
+
+## 🎯 핵심 개념
+
+### 1. Wait가 필요한 이유
+
+```python
+# ❌ 이렇게 하면 에러 발생 가능
+driver.get("https://example.com")
+element = driver.find_element(By.ID, "button")  # 페이지 로딩 중이라 요소가 없을 수 있음!
+element.click()
+```
+
+페이지가 완전히 로드되기 전에 요소를 찾으려고 하면 `NoSuchElementException` 에러가 발생
+
+### 2. Wait의 3가지 종류
+
+#### 1) Implicit Wait (암묵적 대기)
+```python
+driver.implicitly_wait(10)  # 최대 10초까지 기다림
+```
+- 모든 `find_element()`에 **자동으로 적용**되는 전역 대기 시간
+- 요소를 못 찾으면 최대 10초까지 0.5초마다 재시도
+
+#### 2) Explicit Wait (명시적 대기)
+```python
+wait = WebDriverWait(driver, 10)
+element = wait.until(EC.presence_of_element_located((By.ID, "button")))
+```
+- **특정 요소**에만 적용하는 대기
+- **조건**(Condition)을 만족할 때까지 기다림
+
+#### 3) Expected Conditions (EC)
+- Explicit Wait에서 사용하는 **미리 정의된 조건들**
+- 예: `presence_of_element_located`, `element_to_be_clickable`, `visibility_of_element_located` 등 
+- 
+
+---
+
+## 🔧 주요 Expected Conditions
+
+```python
+# 1. 요소가 DOM에 존재할 때까지 대기
+EC.presence_of_element_located((By.ID, "element"))
+
+# 2. 요소가 보일 때까지 대기 (visibility)
+EC.visibility_of_element_located((By.ID, "element"))
+
+# 3. 요소가 클릭 가능할 때까지 대기
+EC.element_to_be_clickable((By.ID, "button"))
+
+# 4. 텍스트가 포함될 때까지 대기
+EC.text_to_be_present_in_element((By.ID, "message"), "완료")
+
+# 5. input 필드의 value에 텍스트가 포함될 때까지 대기
+EC.text_to_be_present_in_element_value((By.ID, "query"), "Python")
+
+# 6. 요소가 사라질 때까지 대기
+EC.invisibility_of_element_located((By.ID, "loading"))
+
+# 7. URL이 변경될 때까지 대기
+EC.url_contains("search.naver.com")
+```
+
+---
+
+## 💡 presence vs visibility - 중요한 차이점!
+
+### presence_of_element_located
+```python
+# ✅ DOM에 존재하기만 하면 OK
+wait.until(EC.presence_of_element_located((By.ID, "element")))
+
+# 다음 경우에도 찾을 수 있음:
+# - display: none 이어도 OK
+# - opacity: 0 이어도 OK
+# - 화면 밖에 있어도 OK
+```
+
+### visibility_of_element_located
+```python
+# ✅ DOM에 존재 + 화면에 보여야 함
+wait.until(EC.visibility_of_element_located((By.ID, "element")))
+
+# 다음 경우에는 찾을 수 없음:
+# - display: none → ❌
+# - opacity: 0 → ❌
+# - width/height가 0 → ❌
+```
+
+### 언제 무엇을 사용할까?
+
+| 상황 | 추천 | 이유 |
+|------|------|------|
+| 동적으로 추가되는 요소 | `presence` | DOM 추가가 중요 |
+| 애니메이션 효과 있는 요소 | `presence` → 확인 | 애니메이션 완료 전에도 작업 가능 |
+| 클릭/입력해야 하는 요소 | `visibility` 또는 `clickable` | 실제로 보여야 상호작용 가능 |
+| 단순 정보 추출 | `presence` | 화면에 안 보여도 데이터는 있음 |
+
+**실전 패턴:**
+```python
+# 1. presence로 빠르게 찾기
+element = wait.until(EC.presence_of_element_located((By.ID, "element")))
+
+# 2. 필요시 화면에 보일 때까지 추가 대기
+wait.until(lambda driver: element.is_displayed())
+```
+
+---
+
+## 📝 실습 코드
+
+### 1. Implicit Wait 기본 사용
+
+```python
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+
+def setup_driver():
+    options = webdriver.ChromeOptions()
+    options.add_experimental_option("excludeSwitches", ["enable-automation"])
+    
+    driver = webdriver.Chrome(options=options)
+    
+    # ✅ Implicit Wait 설정 - 모든 find_element에 적용됨
+    driver.implicitly_wait(10)  # 최대 10초 대기
+    
+    return driver
+
+driver = setup_driver()
+driver.get("https://www.naver.com")
+
+# 이제 요소가 로드될 때까지 자동으로 기다림
+search_box = driver.find_element(By.ID, "query")
+print("✅ 검색창 찾음")
+
+driver.quit()
+```
+
+### 2. Explicit Wait로 조건 대기
+
+```python
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+
+driver = webdriver.Chrome()
+driver.get("https://www.naver.com")
+
+# Explicit Wait 객체 생성
+wait = WebDriverWait(driver, 10)
+
+# 검색창이 보일 때까지 대기
+search_box = wait.until(
+    EC.visibility_of_element_located((By.ID, "query"))
+)
+
+# 검색어 입력
+search_box.send_keys("Python")
+
+# input 필드의 value에 "Python"이 포함될 때까지 대기
+wait.until(
+    EC.text_to_be_present_in_element_value((By.ID, "query"), "Python")
+)
+print("✅ 검색어 입력 확인됨!")
+
+driver.quit()
+```
+
+### 3. Timeout 예외 처리
+
+```python
+from selenium.common.exceptions import TimeoutException
+
+driver = webdriver.Chrome()
+wait = WebDriverWait(driver, 5)
+
+try:
+    driver.get("https://www.naver.com")
+    
+    # 존재하지 않는 요소 찾기 시도
+    element = wait.until(
+        EC.presence_of_element_located((By.ID, "nonexistent-element"))
+    )
+    print("✅ 요소 찾음")
+    
+except TimeoutException:
+    print("⏰ Timeout 발생: 5초 안에 요소를 못 찾음")
+    print("→ 대체 동작 수행 가능")
+
+finally:
+    driver.quit()
+```
+
+### 4. 커스텀 Wait 조건 (Lambda)
+
+```python
+driver = webdriver.Chrome()
+wait = WebDriverWait(driver, 10)
+
+driver.get("https://www.naver.com")
+
+search_box = wait.until(
+    EC.visibility_of_element_located((By.ID, "query"))
+)
+
+search_box.send_keys("Python")
+
+# ✅ Lambda 함수로 커스텀 조건 만들기
+# input 값의 길이가 6 이상일 때까지 대기
+wait.until(
+    lambda driver: len(driver.find_element(By.ID, "query").get_attribute("value")) >= 6
+)
+print("✅ 검색어가 6글자 이상 입력됨")
+
+driver.quit()
+```
+
+### 5. 재시도 로직을 포함한 헬퍼 함수
+
+```python
+from selenium.common.exceptions import TimeoutException
+import time
+
+def wait_for_element_with_retry(driver, by, value, timeout=10, retry_count=3):
+    """
+    요소를 찾을 때까지 재시도하는 헬퍼 함수
+    """
+    wait = WebDriverWait(driver, timeout)
+    
+    for attempt in range(retry_count):
+        try:
+            element = wait.until(
+                EC.presence_of_element_located((by, value))
+            )
+            print(f"✅ 요소 찾음 (시도 {attempt + 1}회)")
+            return element
+        except TimeoutException:
+            print(f"⏰ 시도 {attempt + 1}회 실패")
+            if attempt == retry_count - 1:
+                raise
+            time.sleep(1)
+
+# 사용 예시
+driver = webdriver.Chrome()
+driver.get("https://www.naver.com")
+
+search_box = wait_for_element_with_retry(
+    driver, By.ID, "query", timeout=5, retry_count=3
+)
+
+driver.quit()
+```
+
+---
+
+## 🚀 네이버 자동완성 처리
+
+
+```python
+import sys
+import os
+from urllib.parse import unquote  # ✅ URL 디코딩 모듈
+
+current_file = os.path.abspath(__file__) # 현재 파일 경로를 절대 경로로 변환
+current_dir = os.path.dirname(current_file) # 현재 파일 경로(절대경로)에서 디렉토리만 남김
+parent_dir = os.path.dirname(current_dir) # 디렉토리만 있는 경로의 부모 디렉토리
+sys.path.insert(0, parent_dir)
+# sys.path 목록에 가장 상단 위치에 parednt_dir를 추가함
+# 이렇게 설정하면 parent_dir를 가장 먼저 탐색하여 dirver_setup 모듈을 찾을 수 있음
+
+
+# 모듈 찾은걸 토대로 import
+from utils.driver_setup import setup_chrome_driver
+from selenium.webdriver.common.by import By
+from selenium.common.exceptions import NoSuchElementException
+
+# Explicitly wait 설정
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import TimeoutException
+import time
+
+def safe_find_click(driver, wait, retries=3):
+    # 안전하게 요소 찾기
+    for attempt in range(retries):
+        try:
+            # 해당 함수는 자동완성이 생긴 뒤 호출되는 함수이므로
+            # 굳이 presence_of_element_located로 대기할 필요 없음
+            second_item_click_btn = wait.until(
+                EC.element_to_be_clickable(
+                    (By.CSS_SELECTOR, '.kwd_lst .item:nth-child(2) .kwd')
+                )
+            )
+            print("요소 찾음")
+            return second_item_click_btn
+        except TimeoutException:
+            print("버튼 찾기 실패")
+            print(f"❌ {attempt+1}번째 시도: 두 번째 자동완성 요소를 찾지 못했습니다. 재시도 중...")
+            if attempt == retries - 1:
+                raise
+            time.sleep(1)
+
+    
+def main():
+    driver = setup_chrome_driver()
+     
+    try:
+        # driver & wait 설정
+        driver.get("https://www.naver.com")
+        wait = WebDriverWait(driver, 10)
+        
+        # 검색창 찾기
+        search_box = wait.until(EC.visibility_of_element_located((By.ID,"query")))
+        
+        # 자동완성 확인
+        search_word = input("자동완성 검색어 입력 : ")
+        for char in search_word:
+            search_box.send_keys(char) # search_word의 글자 하나씩 입력
+            time.sleep(0.3) # 자동완성 나타나는 시간
+        
+        print(f"{search_word} 입력 완료")
+        time.sleep(1)
+        
+        page_source = driver.page_source
+        
+        if 'role="listbox"' in page_source:
+            print("✅ 페이지에 role='listbox' 존재함")
+        else:
+            print("❌ 페이지에 role='listbox' 없음")
+        
+        if 'kwd_lst' in page_source:
+            print("✅ 페이지에 'kwd_lst' 클래스 존재함")
+        else:
+            print("❌ 페이지에 'kwd_lst' 클래스 없음")
+            
+            
+        try:
+            autocomplete_list = wait.until(
+                 EC.presence_of_element_located(
+                    (By.CSS_SELECTOR, ".kwd_lst")
+                )
+            )
+            print("✅ 자동완성 항목이 나타났습니다.")
+            
+            list_items = wait.until(
+                EC.visibility_of_all_elements_located(
+                    (By.CSS_SELECTOR, '.kwd_lst .item .kwd_txt') # 자동완성 항목들
+                )
+            )
+            
+            print(f"자동완성 항목 개수 : {len(list_items)}")
+            for item in list_items:
+                print(f"- {item.text}")
+                
+        except TimeoutException:
+            print("❌ 자동완성 항목이 나타나지 않았습니다.")
+            
+        second_item = list_items[1]
+        print(f"자동완성 두 번째 요소 : {second_item.text}")
+        
+        # 두 번째 요소 클릭
+        print("두 번째 요소 클릭 대기 중")
+        second_btn = safe_find_click(driver,wait,retries=3)
+        
+        second_btn.click()
+        print("두 번째 요소 클릭 완료")
+        
+        # 결과 페이지가 변경되었는지 확인
+        # 페이지 url에 search_word가 포함되었는지 확인
+        
+        time.sleep(2) # 페이지 변환 대기
+        current_url = unquote(driver.current_url) # URL 디코딩
+        
+        print(f"현재 URL: {current_url}")
+        print(f"검색어: {search_word}")
+        
+        if(search_word in current_url):
+            print("✅ 결과 페이지 URL에 검색어가 포함되어 있습니다.")
+        else:
+            print("❌ 결과 페이지 URL에 검색어가 포함되어 있지 않습니다.")
+        
+    except Exception as e:
+        print(f"❌ 에러 발생: {e}")
+    
+    finally:
+        input("엔터키 누르면 종료...")
+        driver.quit()    
+        
+if __name__=="__main__":
+    main()
+```
+
+### 주요 학습 포인트
+
+1. **CSS Selector 심화**
+   ```python
+   # attribute 선택자
+   'ul[role="listbox"]'  # role 속성이 "listbox"인 ul
+   
+   # 자손 선택자
+   '.kwd_lst .item .kwd_txt'  # .kwd_lst 안의 .item 안의 .kwd_txt
+   
+   # nth-child 선택자
+   '.kwd_lst .item:nth-child(2)'  # 두 번째 항목
+   ```
+
+2. **Wait 전략**
+   - 자동완성 컨테이너: `presence_of_element_located` (애니메이션 중에도 찾을 수 있음)
+   - 자동완성 항목들: `visibility_of_all_elements_located` (실제로 보이는 항목만)
+   - 클릭 버튼: `element_to_be_clickable` (클릭 가능할 때까지 대기)
+
+3. **에러 처리**
+   ```python
+   try:
+       # 메인 로직
+   except TimeoutException:
+       # Timeout 발생 시 처리
+   except Exception as e:
+       # 기타 예외 처리
+   finally:
+       # 항상 실행 (브라우저 종료)
+   ```
+
+---
+
+## 📌 추가 학습: URL 디코딩
+
+### 문제 상황
+
+브라우저 URL에서 한글이나 특수문자는 **URL 인코딩**되어 표시됩니다:
+
+```python
+# 실제 브라우저 URL
+https://search.naver.com/search.naver?query=%ED%8C%8C%EC%9D%B4%EC%8D%AC
+
+# 우리가 보고 싶은 형태
+https://search.naver.com/search.naver?query=파이썬
+```
+
+### 해결 방법: urllib.parse 모듈
+
+```python
+from urllib.parse import unquote, quote
+
+# 1. URL 디코딩 (인코딩된 → 한글)
+encoded_url = "https://search.naver.com/search.naver?query=%ED%8C%8C%EC%9D%B4%EC%8D%AC"
+decoded_url = unquote(encoded_url)
+print(decoded_url)  # https://search.naver.com/search.naver?query=파이썬
+
+# 2. URL 인코딩 (한글 → 인코딩)
+search_word = "파이썬"
+encoded_word = quote(search_word)
+print(encoded_word)  # %ED%8C%8C%EC%9D%B4%EC%8D%AC
+
+# 3. Selenium에서 사용
+current_url = driver.current_url
+decoded_url = unquote(current_url)
+
+if "파이썬" in decoded_url:
+    print("✅ 검색어 확인!")
+```
+
+### URL 파라미터 파싱 (고급)
+
+```python
+from urllib.parse import urlparse, parse_qs
+
+url = "https://search.naver.com/search.naver?where=nexearch&query=%ED%8C%8C%EC%9D%B4%EC%8D%AC&sm=top"
+
+# URL 파싱
+parsed_url = urlparse(url)
+print(f"도메인: {parsed_url.netloc}")  # search.naver.com
+print(f"경로: {parsed_url.path}")      # /search.naver
+
+# 파라미터 추출
+params = parse_qs(parsed_url.query)
+print(f"파라미터: {params}")
+# {'where': ['nexearch'], 'query': ['파이썬'], 'sm': ['top']}
+
+# 특정 파라미터 값 가져오기
+search_query = params['query'][0]
+print(f"검색어: {search_query}")  # 파이썬
+```
+
+---
+
+## 🎓 Stage 3에서 배운 것
+
+### 핵심 개념
+1. **Implicit Wait** - 전역 대기 시간 설정
+2. **Explicit Wait** - 특정 조건까지 명시적 대기
+3. **Expected Conditions** - 자주 사용하는 대기 조건들
+4. **presence vs visibility** - DOM 존재 vs 화면 표시의 차이
+5. **Timeout 처리** - `TimeoutException`으로 예외 처리
+6. **커스텀 Wait** - Lambda 함수로 복잡한 조건 만들기
+7. **재시도 로직** - 요소를 찾을 때까지 반복 시도
+8. **URL 디코딩** - `unquote()`로 한글 URL 처리
+
+### 실전 스킬
+- 동적으로 생성되는 요소 안전하게 처리
+- 자동완성, 드롭다운 등 동적 UI 요소 다루기
+- CSS Selector의 attribute, nth-child 사용
+- 재사용 가능한 헬퍼 함수 작성
+- 적절한 예외 처리로 안정적인 코드 작성
+
+### 문제 해결 경험
+1. **변수명 충돌** - `time` 모듈과 `time` 변수명 충돌 해결
+2. **CSS Selector 공백** - `.item .class` vs `.item.class` 차이 이해
+3. **visibility 실패** - 애니메이션 중 요소를 `presence`로 먼저 찾기 (DOM 체크부터)
+4. **URL 인코딩** - 한글 검색어 URL 확인을 위한 디코딩
+
+---
+
+
+## 📂 프로젝트 구조
+
+```
+project3/
+├── utils/
+│   └── driver_setup.py      # 공통 드라이버 설정
+├── ch1_implicit_wait.py      # Implicit Wait 실습
+├── ch2_explicit_wait.py      # Explicit Wait 실습
+├── ch3_timeout_handling.py   # Timeout 처리 실습
+├── ch4_custom_conditions.py  # 커스텀 조건 실습
+├── ch5_autocomplete.py       # 네이버 자동완성 프로젝트
+└── README.md                 # 이 문서
+```
+
+---
+
+
+</details>
+
 
 
 
